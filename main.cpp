@@ -1,5 +1,5 @@
 #include <string>
-#include <pthread.h>
+#include <cstring>
 #include "inc.h"
 
 int main(int argc, char* argv[]) {
@@ -21,16 +21,26 @@ int main(int argc, char* argv[]) {
 
     size_t* I = nullptr;
     double* A = nullptr;
+    if (allocate_msr_matrix(nx, ny, &A, &I)) { return -2; }
+    init_reduce_sum(p);
+    size_t N = (nx + 1) * (size_t)(ny + 1);
+    double* B = new double[N];
+    double* x = new double[N];
+    double* r = new double[N];
+    double* u = new double[N];
+    double* v = new double[N];
 
-    if (allocate_msr_matrix(nx, ny, &A, &I)) { return -2; } 
     fill_I(nx, ny, I);
+
+    memset(x, 0, N*sizeof(double));
 
     Args* args = new Args[p];
     pthread_t* tid = new pthread_t[p];
-
+    
     for (int k = 1; k < p; ++k) {
         args[k].a = a; args[k].b = b; args[k].c = c; args[k].d = d;
-        args[k].eps = eps; args[k].I = I; args[k].A = A; 
+        args[k].eps = eps; args[k].I = I; args[k].A = A; args[k].B = B; 
+        args[k].x = x; args[k].r = r; args[k].u = u; args[k].v = v;
         args[k].nx = nx; args[k].ny = ny; args[k].m = m; 
         args[k].maxit = maxit; args[k].p = p; args[k].k = k;
 
@@ -38,7 +48,8 @@ int main(int argc, char* argv[]) {
     }
 
     args[0].a = a; args[0].b = b; args[0].c = c; args[0].d = d;
-    args[0].eps = eps; args[0].I = I; args[0].A = A; 
+    args[0].eps = eps; args[0].I = I; args[0].A = A; args[0].B = B;
+    args[0].x = x; args[0].r = r; args[0].u = u; args[0].v = v;
     args[0].nx = nx; args[0].ny = ny; args[0].m = m; 
     args[0].maxit = maxit; args[0].p = p; args[0].k = 0;
     solution(args + 0);
@@ -47,9 +58,21 @@ int main(int argc, char* argv[]) {
         pthread_join(tid[k], 0);
     }    
 
+    for (int i = 0; i < N; ++i) {
+        printf("%lf ", x[i]);
+    }
+    printf("\n");
+
+    free_results();
     delete[] I;
     delete[] A;
+    delete[] B;
+    delete[] x;
+    delete[] r;
+    delete[] u;
+    delete[] v;
     delete[] args;
     delete[] tid;
+
     return 0;
 }
