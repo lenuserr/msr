@@ -5,7 +5,7 @@
 
 #define F(I, J) (f(a + (I)*hx, с + (J)*hy))
 
-void matrix_mult_vector_msr(int n, double* A, size_t* I, double* x, double* y, int p, int k) {
+void matrix_mult_vector_msr(int n, double* A, int* I, double* x, double* y, int p, int k) {
     int i, i1, i2, l, J; double s;
     thread_rows(n, p, k, i1, i2);
     for (i = i1; i < i2; ++i) {
@@ -20,30 +20,53 @@ void matrix_mult_vector_msr(int n, double* A, size_t* I, double* x, double* y, i
     }
 }
 
-// Ax = b, x - в начале x0, в конце решение
-int minimal_residual_msr_matrix(int n, double* A, size_t* I, double* b, double* x,
+void apply_preconditioner_msr_matrix(int n, double* A, int* I, double* v1, double* v2, int flag, int p, int k) {
+    double w = 1; // гиперпараметр (метод Зейделя при w = 1)
+    if (flag) {
+        solve_lsystem(n, I, A, v2, v1, w, p, k);
+    } else {
+        solve_rsystem(n, I, A, v2, v1, w, p, k);
+    }
+
+    reduce_sum<int>(p);
+}
+
+bool step(int n, double* A, int* I, double* x, double* r, double* u, double* v, double prec, int p, int k) {
+    matrix_mult_vector_msr(n, A, I, v, u, p, k); // u = Av
+    double c1 = scalar_product(n, u, r, p, k); // C1 = (u, r)
+    double c2 = scalar_product(n, u, u, p, k); // C2 = (u, u)
+    if (c1 < prec || c2 < prec) {
+        return true;
+    }
+
+    double tau = c1 / c2;
+    mult_sub_vector(n, x, v, tau, p, k); // x -= tau * v
+    mult_sub_vector(n, r, u, tau, p, k); // r -= tau * u
+    return false;
+}
+
+int minimal_residual_msr_matrix(int n, double* A, int* I, double* b, double* x,
     double* r, double* u, double* v, double eps, int maxit, int p, int k) {
 
-    double prec, b_norm2, tau, c1, c2;
+    double prec, b_norm2;
     int it;
     b_norm2 = scalar_product(n, b, b, p, k); // (b, b)
     prec = b_norm2 * eps * eps;
     matrix_mult_vector_msr(n, A, I, x, r, p, k); // r = Ax
     mult_sub_vector(n, r, b, 1., p, k); // r -= 1*b
-
+    
     for (it = 0; it < maxit; ++it) {
-        // v = M^(-1) r - метод Якоби
-        apply_preconditioner_msr_matrix(n, A, I, v, r, p, k);
-        matrix_mult_vector_msr(n, A, I, v, u, p, k); // u = Av
-        c1 = scalar_product(n, u, r, p, k); // C1 = (u, r)
-        c2 = scalar_product(n, u, u, p, k); // C2 = (u, u)
-        if (c1 < prec || c2 < prec) {
+        apply_preconditioner_msr_matrix(n, A, I, v, r, 0, p, k); // v = np.linalg.solve(L, r)
+        if (step(n, A, I, x, r, u, v, prec, p, k)) {
             break;
         }
 
-        tau = c1 / c2;
-        mult_sub_vector(n, x, v, tau, p, k); // x -= tau * v
-        mult_sub_vector(n, r, u, tau, p, k); // r -= tau * u
+        matrix_mult_vector_msr(n, A, I, x, u, p, k); // u = Ax
+        mult_sub_vector(n, u, b, 1., p, k); // u -= b 
+        apply_preconditioner_msr_matrix(n, A, I, v, u, 1, p, k); // v = np.linalg.solve(R, a@x-b)
+        if (step(n, A, I, x, r, u, v, prec, p, k)) {
+            break;
+        }
     }
 
     if (it > maxit) {
@@ -53,7 +76,7 @@ int minimal_residual_msr_matrix(int n, double* A, size_t* I, double* b, double* 
     return it;
 }
 
-int minimal_residual_msr_matrix_full(int n, double* A, size_t* I, double* b, double* x, double* r, double* u, double* v, 
+int minimal_residual_msr_matrix_full(int n, double* A, int* I, double* b, double* x, double* r, double* u, double* v, 
     double eps, int maxit, int maxsteps, int p, int k) {
 
     int step, ret, its = 0;
@@ -94,8 +117,8 @@ void mult_sub_vector(int n, double* x, double* y, double tau, int p, int k) {
 
     reduce_sum<int>(p);
 }
-
-void apply_preconditioner_msr_matrix(int n, double* A, [[maybe_unused]] size_t* I, double* v, double* r, int p, int k) {
+/*
+void apply_preconditioner_msr_matrix(int n, double* A, int* I, double* v, double* r, int p, int k) {
     // v = M^{-1} * r
     int i, i1, i2;
     thread_rows(n, p, k, i1, i2);
@@ -105,17 +128,17 @@ void apply_preconditioner_msr_matrix(int n, double* A, [[maybe_unused]] size_t* 
 
     reduce_sum<int>(p);
 }
-
-void ij2l(int nx, [[maybe_unused]] int ny, int i, int j, size_t& l) {
-    l = i + j * (size_t)(nx + 1);
+*/
+void ij2l(int nx, int, int i, int j, int& l) {
+    l = i + j * (int)(nx + 1);
 }
 
-void l2ij(int nx, [[maybe_unused]] int ny, int& i, int& j, size_t l) {
+void l2ij(int nx, int, int& i, int& j, int l) {
     j = l / (nx + 1);
-    i = l - j * (size_t)(nx + 1);
+    i = l - j * (nx + 1);
 }
 
-size_t get_len_msr(int nx, int ny) {
+int get_len_msr(int nx, int ny) {
     return (nx + 1)*(ny + 1)
             + 6*(nx - 1)*(ny - 1)
             + 4*(2*(nx-1) + 2*(ny-1))
@@ -126,8 +149,8 @@ size_t get_len_msr(int nx, int ny) {
                   while (0)
 
 // странно считает 0 1 0 1 2 2 1 1e-10 1000 1
-int get_off_diag(int nx, int ny, int i, int j, size_t* I_ij) {
-    int m = 0; size_t k;
+int get_off_diag(int nx, int ny, int i, int j, int* I_ij) {
+    int m = 0; int k;
     if (i < nx) { FUNC(i+1, j); }
     if (j > 0) { FUNC(i, j-1); }
     if (i > 0 && j > 0) { FUNC(i-1, j-1); }
@@ -138,8 +161,8 @@ int get_off_diag(int nx, int ny, int i, int j, size_t* I_ij) {
     return m;
 }
 
-size_t get_len_msr_off_diag(int nx, int ny) {
-    size_t m = 0; int i, j;
+int get_len_msr_off_diag(int nx, int ny) {
+    int m = 0; int i, j;
     for (i = 0; i <= nx; ++i) {
         for (j = 0; j <= ny; ++j) {
             m += get_off_diag(nx, ny, i, j);
@@ -149,29 +172,22 @@ size_t get_len_msr_off_diag(int nx, int ny) {
     return m;
 }
 
-int allocate_msr_matrix(int nx, int ny, double** p_A, size_t** p_I) {
-    size_t diag_len = (nx+1)*(ny+1);
-    size_t off_diag = get_len_msr_off_diag(nx, ny);
-    size_t len = diag_len + off_diag + 1;
+int allocate_msr_matrix(int nx, int ny, double** p_A, int** p_I) {
+    int diag_len = (nx+1)*(ny+1);
+    int off_diag = get_len_msr_off_diag(nx, ny);
+    int len = diag_len + off_diag + 1;
 
-    double* A = nullptr; size_t* I = nullptr;
+    double* A = nullptr; int* I = nullptr;
     A = new double[len]; if (A == nullptr) { return 1; }
-    I = new size_t[len]; if (I == nullptr) { return 2; }
+    I = new int[len]; if (I == nullptr) { return 2; }
     *p_A = A; *p_I = I;
     return 0;  
 }
 
-/*
-void l2ij(int nx, [[maybe_unused]] int ny, int& i, int& j, size_t l) {
-    j = l / (nx + 1);
-    i = l - j * (size_t)(nx + 1);
-}
-*/
-
-void fill_I(int nx, int ny, size_t* I) { 
-    size_t N = (size_t)(nx+1) * (ny+1);
-    size_t l; int i, j;
-    int m; size_t r = N + 1;
+void fill_I(int nx, int ny, int* I) { 
+    int N = (nx+1) * (ny+1);
+    int l; int i, j;
+    int m; int r = N + 1;
     for (l = 0; l < N; ++l) {
         l2ij(nx, ny, i, j, l);
         I[l] = r;
@@ -237,14 +253,14 @@ void fill_A_ij(int nx, int ny, double hx, double hy, int i, int j, double* A_dia
     // abort() если сюда дошли
 }
 
-void fill_A(int nx, int ny, double hx, double hy, size_t* I, double* A, int p, int k) {
-    size_t l1, l2;
+void fill_A(int nx, int ny, double hx, double hy, int* I, double* A, int p, int k) {
+    int l1, l2;
     int i, j;
-    size_t N = (nx + 1) * (size_t)(ny + 1);    
+    int N = (nx + 1) * (ny + 1);    
     l1 = N * k; l1 /= p;
     l2 = N * (k + 1); l2 /= p;
 
-    for (size_t l = l1; l < l2; ++l) {
+    for (int l = l1; l < l2; ++l) {
         l2ij(nx, ny, i, j, l);
         double* A_diag = A + l;
         double* A_off_diag = A + I[l];
@@ -256,9 +272,9 @@ void fill_A(int nx, int ny, double hx, double hy, size_t* I, double* A, int p, i
 }
 
 // обязательно проверить матрицу построенную на симметричность иначе потом долго ошибку искать
-int check_symm(int nx, int ny, size_t* I, double* A, double eps, int p, int k) {
-    size_t l1, l2, l;
-    size_t N = (nx+1)*(size_t)(ny+1);
+int check_symm(int nx, int ny, int* I, double* A, double eps, int p, int k) {
+    int l1, l2, l;
+    int N = (nx+1)*(ny+1);
     l1 = k * N; l1 /= p;
     l2 = (k + 1) * N; l2 /= p;
 
@@ -310,7 +326,7 @@ double F_IJ(int nx, int ny, double hx, double hy, double a, double с, int i, in
     if (i > 0 && i < nx && j == ny) {
         return w * (
             18*F(i, j) + 10*(F(i+0.5,j) + F(i-0.5,j)) + 20*(F(i,j-0.5) + F(i-0.5,j-0.5))
-            + 4*(F(i+0.5,j-0.5) + F(i-0.5,j-1) + F(i-1,j-0.5)) + 1*(F(i-1,j) + F(i+1,j)) + 2*(F(i-1,j) + F(i-1,j-1))
+            + 4*(F(i+0.5,j-0.5) + F(i-0.5,j-1) + F(i-1,j-0.5)) + 1*(F(i-1,j) + F(i+1,j)) + 2*(F(i,j-1) + F(i-1,j-1))
         );
     }
 
@@ -358,16 +374,54 @@ double F_IJ(int nx, int ny, double hx, double hy, double a, double с, int i, in
 }
 
 void fill_B(int nx, int ny, double hx, double hy, double a, double c, double* B, double (*f)(double, double), int p, int k) {
-    size_t l1, l2;
+    int l1, l2;
     int i, j;
-    size_t N = (nx + 1) * (size_t)(ny + 1);    
+    int N = (nx + 1) * (ny + 1);    
     l1 = N * k; l1 /= p;
     l2 = N * (k + 1); l2 /= p;
 
-    for (size_t l = l1; l < l2; ++l) {
+    for (int l = l1; l < l2; ++l) {
         l2ij(nx, ny, i, j, l);
         B[l] = F_IJ(nx, ny, hx, hy, a, c, i, j, f);
     }
 
     reduce_sum<int>(p);
+}
+
+void solve_rsystem(int n, int* I, double* U, double* b, double* x, double w, int p, int k) {
+
+    int i1, i2;
+    thread_rows(n, p, k, i1, i2);
+
+    for (int i = i2 - 1; i >= i1; --i) {
+        int m = I[i + 1] - I[i];
+        double s = 0;
+        for (int q = 0; q < m; ++q) {
+            int j = I[I[i] + q];
+            if (j >= i1 && j < i2 && j > i) {
+                s += w * x[j] * U[I[i] + q];
+            }
+        }
+
+        x[i] = (b[i] - s) / U[i];
+    }    
+}
+
+void solve_lsystem(int n, int* I, double* U, double* b, double* x, double w, int p, int k) {
+
+    int i1, i2;
+    thread_rows(n, p, k, i1, i2);
+
+    for (int i = i2 - 1; i >= i1; --i) {
+        int m = I[i + 1] - I[i];
+        double s = 0;
+        for (int q = 0; q < m; ++q) {
+            int j = I[I[i] + q];
+            if (j >= i1 && j < i2 && j < i) {
+                s += w * x[j] * U[I[i] + q];
+            }
+        }
+
+        x[i] = (b[i] - s) / U[i];
+    }    
 }

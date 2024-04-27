@@ -19,6 +19,7 @@ double reduce_sum_det(int p, int k, double s) {
         sum += results[l];
     }
 
+    reduce_sum<int>(p);
     return sum;
 }
 

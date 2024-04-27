@@ -3,27 +3,26 @@
 #include <stddef.h>
 #include "math.h"
 
-void matrix_mult_vector_msr(int n, double* A, size_t* I, double* x, double* y, int p, int k);
-int minimal_residual_msr_matrix(int n, double* A, size_t* I, double* b, double* x,
+void matrix_mult_vector_msr(int n, double* A, int* I, double* x, double* y, int p, int k);
+int minimal_residual_msr_matrix(int n, double* A, int* I, double* b, double* x,
     double* r, double* u, double* v, double eps, int maxit, int p, int k);
 
-int minimal_residual_msr_matrix_full(int n, double* A, size_t* I, double* b, double* x, double* r, double* u, double* v, 
+int minimal_residual_msr_matrix_full(int n, double* A, int* I, double* b, double* x, double* r, double* u, double* v, 
     double eps, int maxit, int maxsteps, int p, int k);
 
 void thread_rows(int n, int p, int k, int& i1, int& i2);
 double scalar_product(int n, double* x, double* y, int p, int k);
 void mult_sub_vector(int n, double* x, double* y, double tau, int p, int k);
-void apply_preconditioner_msr_matrix(int n, double* A, size_t* I, double* v, double* r, int p, int k);
-void ij2l(int nx, int ny, int i, int j, size_t& l);
-void l2ij(int nx, int ny, int& i, int& j, size_t l);
-size_t get_len_msr(int nx, int ny);
-int get_off_diag(int nx, int ny, int i, int j, size_t* I_ij = nullptr);
-size_t get_len_msr_off_diag(int nx, int ny);
-int allocate_msr_matrix(int nx, int ny, double** p_A, size_t** p_I);
-void fill_I(int nx, int ny, size_t* I);
+void ij2l(int nx, int, int i, int j, int& l);
+void l2ij(int nx, int, int& i, int& j, int l);
+int get_len_msr(int nx, int ny);
+int get_off_diag(int nx, int ny, int i, int j, int* I_ij = nullptr);
+int get_len_msr_off_diag(int nx, int ny);
+int allocate_msr_matrix(int nx, int ny, double** p_A, int** p_I);
+void fill_I(int nx, int ny, int* I);
 void fill_A_ij(int nx, int ny, double hx, double hy, int i, int j, double* A_diag, double* A_off_diag);
-void fill_A(int nx, int ny, double hx, double hy, size_t* I, double* A, int p, int k);
-int check_symm(int nx, int ny, size_t* I, double* A, double eps, int p, int k);
+void fill_A(int nx, int ny, double hx, double hy, int* I, double* A, int p, int k);
+int check_symm(int nx, int ny, int* I, double* A, double eps, int p, int k);
 double F_IJ(int nx, int ny, double hx, double hy, double a, double с, int i, int j, double (*f)(double, double));
 void fill_B(int nx, int ny, double hx, double hy, double a, double c, double* B, double (*f)(double, double), int p, int k);
 double f_0(double, double);
@@ -34,10 +33,22 @@ double f_4(double x, double y);
 double f_5(double x, double y);
 double f_6(double x, double y);
 double f_7(double x, double y);
-void select_f(int m, double (*f)(double, double));
-void print_vec(size_t N, double* b);
 
+class Functions {
+public:
+    double (*f)(double, double);
+    void select_f(int func_id);
+};
+
+void print_vec(int N, double* b);
+double r3(int nx, int ny, double a, double c, double hx, double hy, double* x, double (*f)(double, double), int p, int k);
+
+void apply_preconditioner_msr_matrix(int n, double* A, int* I, double* v1, double* v2, int flag, int p, int k);
+void solve_rsystem(int n, int* I, double* U, double* b, double* x, double w, int p, int k);
+void solve_lsystem(int n, int* I, double* U, double* b, double* x, double w, int p, int k);
+bool step(int n, double* A, int* I, double* x, double* r, double* u, double* v, double prec, int p, int k);
 void* solution(void* ptr);
+
 int init_reduce_sum(int p);
 double reduce_sum_det(int p, int k, double s);
 void free_results();
@@ -53,7 +64,7 @@ struct Args{
     double c;
     double d;
     double eps;
-    size_t* I;
+    int* I;
     double* A;
     double* B;
     double* x;
@@ -62,10 +73,10 @@ struct Args{
     double* v;
     int nx;
     int ny;
-    int m;
     int maxit;
     int p;
     int k;
+    double (*f)(double, double);
     Status status = Status::success;
 };
 
