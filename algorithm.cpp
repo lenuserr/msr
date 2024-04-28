@@ -1,4 +1,5 @@
 #include "inc.h"
+#include <sys/resource.h>
 
 #define FUNC(I, J) do { ij2l(nx, ny, I, J, k); if (I_ij) { I_ij[m] = k; } m++; } \
                   while (0)
@@ -69,7 +70,7 @@ int minimal_residual_msr_matrix(int n, double* A, int* I, double* b, double* x,
         }
     }
 
-    if (it > maxit) {
+    if (it >= maxit) {
         return -1;
     }
 
@@ -117,18 +118,7 @@ void mult_sub_vector(int n, double* x, double* y, double tau, int p, int k) {
 
     reduce_sum<int>(p);
 }
-/*
-void apply_preconditioner_msr_matrix(int n, double* A, int* I, double* v, double* r, int p, int k) {
-    // v = M^{-1} * r
-    int i, i1, i2;
-    thread_rows(n, p, k, i1, i2);
-    for (i = i1; i < i2; ++i) {
-        v[i] = r[i] / A[i]; 
-    }    
 
-    reduce_sum<int>(p);
-}
-*/
 void ij2l(int nx, int, int i, int j, int& l) {
     l = i + j * (int)(nx + 1);
 }
@@ -354,7 +344,7 @@ double F_IJ(int nx, int ny, double hx, double hy, double a, double с, int i, in
     if (i == nx && j == ny) {
         return w*(
             12*F(i,j) + 10*(F(i-0.5,j) + F(i,j-0.5)) + 20*F(i-0.5,j-0.5)
-            + 4*(F(i-0.5,j+1) + F(i-1,j-0.5)) + 1*(F(i,j-1) + F(i-1,j)) + 2*F(i-1,j-1)
+            + 4*(F(i-0.5,j-1) + F(i-1,j-0.5)) + 1*(F(i,j-1) + F(i-1,j)) + 2*F(i-1,j-1)
         );   
     }
 
@@ -424,4 +414,10 @@ void solve_lsystem(int n, int* I, double* U, double* b, double* x, double w, int
 
         x[i] = (b[i] - s) / U[i];
     }    
+}
+
+double get_cpu_time() {
+    struct rusage buf;
+    getrusage(RUSAGE_THREAD, &buf);
+    return buf.ru_utime.tv_sec + buf.ru_utime.tv_usec * 1e-6;
 }

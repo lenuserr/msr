@@ -1,38 +1,6 @@
 #include <sys/sysinfo.h>
 #include "inc.h"
 
-void print_matrix(int N, int* I, double* A) {
-    for (int i = 0; i < N; ++i) {
-        for (int j = 0; j < N; ++j) {
-            if (i != j) {
-                int m = I[i + 1] - I[i];
-                int q;
-                for (q = 0; q < m; ++q) {
-                    if (I[I[i] + q] == j) {
-                        break;
-                    }
-                }
-
-                if (q >= m) {
-                    printf("%lf ", 0.0);
-                } else {
-                    printf("%lf ", A[I[i] + q]);
-                }
-            } else {
-                printf("%lf ", A[i]);
-            }
-        }
-        printf("\n");
-    }
-}
-
-void print_vec(int N, double* b) {
-    for (int i = 0; i < N; ++i) {
-        printf("%lf ", b[i]);
-    }
-    printf("\n");
-}
-
 void* solution(void* ptr) {
     Args* args = (Args*)ptr;
     double a = args->a; double b = args->b; double c = args->c; double d = args->d;
@@ -57,9 +25,24 @@ void* solution(void* ptr) {
     fill_A(nx, ny, hx, hy, I, A, p, k);
     fill_B(nx, ny, hx, hy, a, c, B, f, p, k); 
 
-    int maxsteps = 500; // гиперпараметр
-    minimal_residual_msr_matrix_full(N, A, I, B, x, r, u, v, eps, maxit, maxsteps, p, k);    
-    
+    int maxsteps = 300; // гиперпараметр
+    args->t1 = get_cpu_time();
+    int its = minimal_residual_msr_matrix_full(N, A, I, B, x, r, u, v, eps, maxit, maxsteps, p, k);  
+    args->t1 = get_cpu_time() - args->t1;
+    args->its = its;
+
+    args->t2 = get_cpu_time();
+    double res_1 = r1(nx, ny, a, c, hx, hy, x, f, p, k);
+    double res_2 = r2(nx, ny, a, c, hx, hy, x, f, p, k);
+    double res_3 = r3(nx, ny, a, c, hx, hy, x, f, p, k);
+    double res_4 = r4(nx, ny, a, c, hx, hy, x, f, p, k);
+    args->t2 = get_cpu_time() - args->t2;
+
+    args->res_1 = res_1;
+    args->res_2 = res_2;
+    args->res_3 = res_3;
+    args->res_4 = res_4;
+
     reduce_sum<int>(p);
     return nullptr;
 }

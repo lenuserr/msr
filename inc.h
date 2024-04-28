@@ -40,14 +40,17 @@ public:
     void select_f(int func_id);
 };
 
-void print_vec(int N, double* b);
+double r1(int nx, int ny, double a, double c, double hx, double hy, double* x, double (*f)(double, double), int p, int k);
+double r2(int nx, int ny, double a, double c, double hx, double hy, double* x, double (*f)(double, double), int p, int k);
 double r3(int nx, int ny, double a, double c, double hx, double hy, double* x, double (*f)(double, double), int p, int k);
+double r4(int nx, int ny, double a, double c, double hx, double hy, double* x, double (*f)(double, double), int p, int k);
 
 void apply_preconditioner_msr_matrix(int n, double* A, int* I, double* v1, double* v2, int flag, int p, int k);
 void solve_rsystem(int n, int* I, double* U, double* b, double* x, double w, int p, int k);
 void solve_lsystem(int n, int* I, double* U, double* b, double* x, double w, int p, int k);
 bool step(int n, double* A, int* I, double* x, double* r, double* u, double* v, double prec, int p, int k);
 void* solution(void* ptr);
+double get_cpu_time();
 
 int init_reduce_sum(int p);
 double reduce_sum_det(int p, int k, double s);
@@ -77,6 +80,13 @@ struct Args{
     int p;
     int k;
     double (*f)(double, double);
+    int its = 0;
+    double t1 = 0;
+    double t2 = 0;
+    double res_1 = 0;
+    double res_2 = 0;
+    double res_3 = 0;
+    double res_4 = 0;
     Status status = Status::success;
 };
 

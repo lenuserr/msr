@@ -2,8 +2,15 @@
 #include <cstring>
 #include "inc.h"
 
+void print_vec(int N, double* b) {
+    for (int i = 0; i < N; ++i) {
+        printf("%lf ", b[i]);
+    }
+    printf("\n");
+}
+
 int main(int argc, char* argv[]) {
-    
+    const int task = 3;    
     if (argc != 11) {
         return -1;
     }
@@ -62,7 +69,18 @@ int main(int argc, char* argv[]) {
         pthread_join(tid[k], 0);
     }    
 
-    print_vec(N, x);
+    int its = args[0].its;
+    double res1 = args[0].res_1; double res2 = args[0].res_2;
+    double res3 = args[0].res_3; double res4 = args[0].res_4;
+    double t1 = args[0].t1; double t2 = args[0].t2;
+
+    printf (
+    "%s : Task = %d R1 = %e R2 = %e R3 = %e R4 = %e T1 = %.2f T2 = %.2f\n\
+    	  It = %d E = %e K = %d Nx = %d Ny = %d P = %d\n",
+          argv[0], task, res1, res2, res3, res4, t1, t2, its, eps, m, nx, ny, p);
+
+    //print_vec(N, x);
+    //print_vec(N, B);    
 
     free_results();
     delete[] I;
